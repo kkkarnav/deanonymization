@@ -7,6 +7,7 @@ import math
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pprint import pprint
+import argparse
 
 tqdm.pandas()
 warnings.filterwarnings("ignore")
@@ -67,10 +68,14 @@ def union_support_columns(df, r1, r2):
 
 # Sim(ri1, ri2) as defined by the paper
 def similar(ri1, ri2):
+    
+    if type(ri1) is np.int64 or type(ri1) is int or type(ri1) is np.float64:
+        ri1 = float(ri1)
+    if type(ri2) is np.int64 or type(ri2) is int or type(ri2) is np.float64:
+        ri2 = float(ri2)
+    
     if type(ri1) != type(ri2):
         return 0
-    elif (type(ri1) is np.int64 and type(ri2) is np.int64) or (type(ri1) is int and type(ri2) is int):
-        return 1 if ri1 == ri2 else 0
     elif (type(ri1) is np.float64 and type(ri2) is np.float64) or (type(ri1) is float and type(ri2) is float):
         return 1 if math.isclose(ri1, ri2, rel_tol=1e-9) else 0
     elif (type(ri1) is bool and type(ri2) is bool) or (type(ri1) is np.bool_ and type(ri2) is np.bool_):
@@ -84,10 +89,7 @@ def similar(ri1, ri2):
 # Sim(r1, r2) as defined by the paper
 def compute_similarity(df, r1, r2):
     
-    similarity = 0
-    for column in union_support_columns(df, r1, r2):
-        similarity += similar(df.loc[r1, column], df.loc[r2, column])
-    
+    similarity = pd.Series(union_support_columns(df, r1, r2)).apply(lambda column: similar(df.loc[r1, column], df.loc[r2, column])).sum()
     sim_score = similarity/union_support_count(df, r1, r2) if union_support_count(df, r1, r2) != 0 else 0
     return sim_score
 
@@ -113,7 +115,7 @@ def score(df, aux, r0):
 # Robust Score(aux, r') as defined by the paper
 def score_robust(df, aux, r0):
     
-    scores = pd.Series(aux.index).apply(lambda column: (math.e**similar(aux.loc[column], df.loc[r0, column]))/math.log(support_count_c(df, column)))
+    scores = pd.Series(aux.index).apply(lambda column: (math.e**similar(aux.loc[column], df.loc[r0, column]))/max(1, math.log(support_count_c(df, column))))
     return scores.sum()/len(aux.index) if len(aux.index) != 0 else 0
 
 # Best guess as defined by the paper
@@ -163,7 +165,10 @@ def scoreboard_robust(df, count):
             
     return scores
 
-support_counts = pd.Series(df.index).apply(lambda x: support_count(df, x))
+df3 = df.loc[:, [col for col in df.columns]]
+
+
+'''support_counts = pd.Series(df.index).apply(lambda x: support_count(df, x))
 support_counts.plot(kind="hist", bins=50, color="steelblue", title="Long-tailed distribution of supp(r) from 0 to 200", xlim=(0, 201), xlabel="Support count", ylabel="Frequency")
 plt.savefig(f"{BASE_PATH}/images/suppr200.png", dpi=600, bbox_inches="tight")
 
@@ -174,9 +179,7 @@ support_counts = pd.Series(df.columns).apply(lambda x: support_count_c(df, x))
 support_counts.plot(kind="hist", bins=50, color="steelblue", title="Long-tailed distribution of supp(c)", xlim=(0, len(df)), xlabel="Support count", ylabel="Frequency")
 plt.savefig(f"{BASE_PATH}/images/suppc.png", dpi=600, bbox_inches="tight")
 
-df3 = df.loc[:, [col for col in df.columns]]
-
-'''nn = pd.Series(df3.index).progress_apply(lambda x: max([compute_similarity(df3, x, i) for i in df3.index if i != x]))
+nn = pd.Series(df3.index).progress_apply(lambda x: max([compute_similarity(df3, x, i) for i in df3.index if i != x]))
 nn.to_csv(f"{BASE_PATH}/results/nearestneighbours.csv")
 
 sorted_nn = nn.reset_index().sort_values(by=0, ascending=False)
@@ -190,32 +193,25 @@ plt.title("Nearest-Neighbor Similarity Distribution")
 plt.legend(fontsize=10)
 plt.savefig(f"{BASE_PATH}/images/nn.png", dpi=600, bbox_inches="tight")'''
 
-results10 = scoreboard(df3, 10)
+parser = argparse.ArgumentParser()
+parser.add_argument("-fc", "--feature_count", help="The number of features available to the adversary", type=int)
+parser.add_argument("-r", "--robust", help="Whether to use the robust scoring function or not", type=bool)
+args = parser.parse_args()
 
-results10.to_csv(f"{BASE_PATH}/results/resultscount10.csv")
+whether_robust = "r" if args.robust else ""
 
-results14 = scoreboard(df3, 14)
-results14.to_csv(f"{BASE_PATH}/results/resultscount14.csv")
+if args.robust:
+    results = scoreboard_robust(df3, args.feature_count)
+    results.to_csv(f"{BASE_PATH}/results/r3r/resultscount{args.feature_count}_robust.csv", index=False)
+else:
+    results = scoreboard(df3, args.feature_count)
+    results.to_csv(f"{BASE_PATH}/results/r3r/resultscount{args.feature_count}.csv", index=False)
 
-results200x12 = scoreboard(df3, 12)
-results200x12.to_csv(f"{BASE_PATH}/results/resultscount12.csv")
+whether_robust = "r" if args.robust else ""
 
-sns.heatmap(results200x12.iloc[:200, :200].astype(float), annot=False, cmap="YlGnBu", linewidths=0) # count=12, alpha=0.5
-plt.savefig(f"{BASE_PATH}/images/heatmap.png", dpi=600, bbox_inches="tight")
+sns.heatmap(results.iloc[:200, :200].astype(float), annot=False, cmap="YlGnBu", linewidths=0) # count=12, alpha=0.5
+plt.savefig(f"{BASE_PATH}/images/heatmap{args.feature_count}{whether_robust}.png", dpi=600, bbox_inches="tight")
 
 # same heatmap as above but with only two colours, showing value >= 0.5 or not
-sns.heatmap(results200x12.iloc[:200, :200].astype(float) >= 0.5, annot=False, cmap="YlGnBu", linewidths=0) # count=12, alpha=0.5
-plt.savefig(f"{BASE_PATH}/images/heatmap_bin.png", dpi=600, bbox_inches="tight")
-
-cop = results200x12.copy()
-results2 = cop.progress_apply(lambda col: col.index.to_series().apply(lambda row_idx: union_support_count(df3, row_idx, col.name)))
-results2.to_csv(f"{BASE_PATH}/results/results_supportcount.csv")
-
-results_robust = scoreboard_robust(df3, 10)
-results_robust.to_csv(f"{BASE_PATH}/results/resultscount10_robust.csv")
-
-results_robust = scoreboard_robust(df3, 12)
-results_robust.to_csv(f"{BASE_PATH}/results/resultscount12_robust.csv")
-
-results_robust = scoreboard_robust(df3, 14)
-results_robust.to_csv(f"{BASE_PATH}/results/resultscount14_robust.csv")
+sns.heatmap(results.iloc[:200, :200].astype(float) >= 0.5, annot=False, cmap="YlGnBu", linewidths=0) # count=12, alpha=0.5
+plt.savefig(f"{BASE_PATH}/images/heatmap_bin{args.feature_count}{whether_robust}.png", dpi=600, bbox_inches="tight")
