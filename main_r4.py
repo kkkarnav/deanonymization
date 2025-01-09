@@ -77,7 +77,7 @@ def similar(ri1, ri2):
     if type(ri1) != type(ri2):
         return 0
     elif (type(ri1) is np.float64 and type(ri2) is np.float64) or (type(ri1) is float and type(ri2) is float):
-        return 1 if abs(abs(ri2) - abs(ri2)) <= 0.2 * ri1 else 0
+        return 1 if abs(abs(ri2) - abs(ri1)) <= 0.2 * ri1 else 0
     elif (type(ri1) is bool and type(ri2) is bool) or (type(ri1) is np.bool_ and type(ri2) is np.bool_):
         return 1 if ri1 == ri2 else 0
     elif type(ri1) is str and type(ri2) is str:
@@ -205,7 +205,7 @@ if args.robust:
     results.to_csv(f"{BASE_PATH}/results/r3r/resultscount{args.feature_count}_robust.csv", index=False)
 else:
     results = scoreboard(df3, args.feature_count)
-    results.to_csv(f"{BASE_PATH}/results/r3r/resultscount{args.feature_count}.csv", index=False)
+    results.to_csv(f"{BASE_PATH}/results/r3/resultscount{args.feature_count}.csv", index=False)
 
 whether_robust = "r" if args.robust else ""
 
