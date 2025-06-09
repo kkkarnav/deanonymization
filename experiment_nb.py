@@ -14,11 +14,11 @@ warnings.filterwarnings("ignore")
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-rl", "--relative", help="The two relatives to match", type=str, default="s2f", choices=["s2f", "s2m", "f2gf", "m2gm"])
+parser.add_argument("-rl", "--relative", help="The two relatives to match", type=str, default="s2f", choices=["s2f", "s2m", "f2gf", "m2gm", "s2s", "f2f", "m2m", "gf2gf", "gm2gm"])
 args = parser.parse_args()
 
 
-BASE_PATH = "./narayan"
+BASE_PATH = "."
 
 data = pd.read_csv(f"{BASE_PATH}/max_data/max_dataset.csv")
 data = data.fillna("Nil")
@@ -57,23 +57,129 @@ father_rows = desc[(desc["family"] == True) & (desc["field_information"] == "FAM
 mother_rows = desc[(desc["family"] == True) & (desc["field_information"] == "Mother") & (~desc["php_code_header"].str.contains("yearofend|duration"))]["php_code_header"]
 grandfather_rows = desc[(desc["family"] == True) & (desc["field_information"] == "Grand Father") & (~desc["php_code_header"].str.contains("yearofend|duration"))]["php_code_header"]
 grandmother_rows = desc[(desc["family"] == True) & (desc["field_information"] == "Grand Mother") & (~desc["php_code_header"].str.contains("yearofend|duration"))]["php_code_header"]
+sibling_rows = desc[(desc["family"] == True) & (desc["field_information"] == "Siblings/Others") & (~desc["php_code_header"].str.contains("yearofend|duration"))]["php_code_header"]
 self = data.loc[:, self_rows]
 father = data.loc[:, father_rows]
 mother = data.loc[:, mother_rows]
 grandfather = data.loc[:, grandfather_rows]
 grandmother = data.loc[:, grandmother_rows]
+sibling = data.loc[:, sibling_rows]
 
 print(args.relative)
 
 if args.relative == "s2f":
-    self_against_father = data.index.to_series().progress_apply(lambda y: data.index.to_series().apply(lambda x: data.loc[x, self_rows].replace(0, False).any() & (data.loc[x, self_rows].values == data.loc[y, father_rows].values).all()))
+    self_against_father = (
+    data.index.to_series().progress_apply(
+            lambda y: data.index.to_series().apply(
+                lambda x: (
+                    data.loc[x, self_rows].replace(0, False).any() & 
+                    (data.loc[x, self_rows].values == data.loc[y, father_rows].values).all() & 
+                    (data.loc[y, "PGDR.gender"] == "Male") & 
+                    ((data.loc[y, "PDOB.dob"] - data.loc[x, "PDOB.dob"]) >= 18)
+                )
+            )
+        )
+    )
     self_against_father.to_csv(f"{BASE_PATH}/results/nb/self_against_father.csv", index=False)
 elif args.relative == "s2m":
-    self_against_mother = data.index.to_series().progress_apply(lambda y: data.index.to_series().apply(lambda x: data.loc[x, self_rows].replace(0, False).any() & (data.loc[x, self_rows].values == data.loc[y, mother_rows].values).all()))
+    self_against_mother = (
+    data.index.to_series().progress_apply(
+            lambda y: data.index.to_series().apply(
+                lambda x: (
+                    data.loc[x, self_rows].replace(0, False).any() & 
+                    (data.loc[x, self_rows].values == data.loc[y, mother_rows].values).all() & 
+                    (data.loc[y, "PGDR.gender"] == "Female") & 
+                    ((data.loc[y, "PDOB.dob"] - data.loc[x, "PDOB.dob"]) >= 18)
+                )
+            )
+        )
+    )
     self_against_mother.to_csv(f"{BASE_PATH}/results/nb/self_against_mother.csv", index=False)
 elif args.relative == "f2gf":
-    father_against_grandfather = data.index.to_series().progress_apply(lambda y: data.index.to_series().apply(lambda x: data.loc[x, father_rows].replace(0, False).any() & (data.loc[x, father_rows].values == data.loc[y, grandfather_rows].values).all()))
+    father_against_grandfather = (
+    data.index.to_series().progress_apply(
+            lambda y: data.index.to_series().apply(
+                lambda x: (
+                    data.loc[x, father_rows].replace(0, False).any() & 
+                    (data.loc[x, father_rows].values == data.loc[y, grandfather_rows].values).all() & 
+                    (data.loc[y, "PGDR.gender"] == "Male") & 
+                    ((data.loc[y, "PDOB.dob"] - data.loc[x, "PDOB.dob"]) >= 36)
+                )
+            )
+        )
+    )
     father_against_grandfather.to_csv(f"{BASE_PATH}/results/nb/father_against_grandfather.csv", index=False)
 elif args.relative == "m2gm":
-    mother_against_grandmother = data.index.to_series().progress_apply(lambda y: data.index.to_series().apply(lambda x: data.loc[x, mother_rows].replace(0, False).any() & (data.loc[x, mother_rows].values == data.loc[y, grandmother_rows].values).all()))
+    mother_against_grandmother = (
+    data.index.to_series().progress_apply(
+            lambda y: data.index.to_series().apply(
+                lambda x: (
+                    data.loc[x, mother_rows].replace(0, False).any() & 
+                    (data.loc[x, mother_rows].values == data.loc[y, grandmother_rows].values).all() & 
+                    (data.loc[y, "PGDR.gender"] == "Female") & 
+                    ((data.loc[y, "PDOB.dob"] - data.loc[x, "PDOB.dob"]) >= 36)
+                )
+            )
+        )
+    )
     mother_against_grandmother.to_csv(f"{BASE_PATH}/results/nb/mother_against_grandmother.csv", index=False)
+elif args.relative == "s2s":
+    self_against_sibling = (
+    data.index.to_series().progress_apply(
+            lambda y: data.index.to_series().apply(
+                lambda x: (
+                    data.loc[x, self_rows].replace(0, False).any() & 
+                    (data.loc[x, self_rows].values == data.loc[y, sibling_rows].values).all()
+                )
+            )
+        )
+    )
+    self_against_sibling.to_csv(f"{BASE_PATH}/results/nb/self_against_sibling.csv", index=False)
+elif args.relative == "f2f":
+    father_against_father = (
+    data.index.to_series().progress_apply(
+            lambda y: data.index.to_series().apply(
+                lambda x: (
+                    data.loc[x, father_rows].replace(0, False).any() & 
+                    (data.loc[x, father_rows].values == data.loc[y, father_rows].values).all()
+                )
+            )
+        )
+    )
+    father_against_father.to_csv(f"{BASE_PATH}/results/nb/father_against_father.csv", index=False)
+elif args.relative == "m2m":
+    mother_against_mother = (
+    data.index.to_series().progress_apply(
+            lambda y: data.index.to_series().apply(
+                lambda x: (
+                    data.loc[x, mother_rows].replace(0, False).any() & 
+                    (data.loc[x, mother_rows].values == data.loc[y, mother_rows].values).all()
+                )
+            )
+        )
+    )
+    mother_against_mother.to_csv(f"{BASE_PATH}/results/nb/mother_against_mother.csv", index=False)
+elif args.relative == "gf2gf":
+    gfather_against_gfather = (
+    data.index.to_series().progress_apply(
+            lambda y: data.index.to_series().apply(
+                lambda x: (
+                    data.loc[x, grandfather_rows].replace(0, False).any() & 
+                    (data.loc[x, grandfather_rows].values == data.loc[y, grandfather_rows].values).all()
+                )
+            )
+        )
+    )
+    gfather_against_gfather.to_csv(f"{BASE_PATH}/results/nb/gfather_against_gfather.csv", index=False)
+elif args.relative == "gm2gm":
+    gmother_against_gmother = (
+    data.index.to_series().progress_apply(
+            lambda y: data.index.to_series().apply(
+                lambda x: (
+                    data.loc[x, grandmother_rows].replace(0, False).any() & 
+                    (data.loc[x, grandmother_rows].values == data.loc[y, grandmother_rows].values).all()
+                )
+            )
+        )
+    )
+    gmother_against_gmother.to_csv(f"{BASE_PATH}/results/nb/gmother_against_gmother.csv", index=False)
